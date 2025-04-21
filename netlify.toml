@@ -1,5 +1,5 @@
 [build]
-  command = "pip install -r requirements.txt"
+  command = "pip install -r requirements.txt && pip install -r functions/requirements.txt"
   publish = "."
 
 [functions]
@@ -9,4 +9,10 @@
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
-  status = 200 
+  status = 200
+
+[functions."trade-analysis"]
+  external_node_modules = ["supabase", "python-dotenv"]
+
+[functions."health"] 
+  external_node_modules = ["python-dotenv"] 
