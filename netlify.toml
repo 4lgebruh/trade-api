@@ -1,10 +1,31 @@
 [build]
-  command = "pip install -r requirements.txt && pip install -r functions/requirements.txt"
+  command = "pip install -r requirements.txt --no-build-isolation"
   publish = "."
+  [build.environment]
+    NETLIFY_USE_BINARY = "true"
+    PYTHONUNBUFFERED = "1"
+
+[build.processing]
+  skip_processing = false
+
+[build.processing.css]
+  bundle = false
+  minify = false
+
+[build.processing.js]
+  bundle = false
+  minify = false
+
+[build.processing.html]
+  pretty_urls = true
+
+[build.processing.images]
+  compress = false
 
 [functions]
   directory = "functions"
   node_bundler = "esbuild"
+  included_files = ["functions/requirements.txt"]
 
 [[redirects]]
   from = "/api/*"
@@ -12,7 +33,7 @@
   status = 200
 
 [functions."trade-analysis"]
-  external_node_modules = ["supabase", "python-dotenv"]
+  external_node_modules = ["supabase", "python-dotenv", "transformers", "numpy"]
 
 [functions."health"] 
   external_node_modules = ["python-dotenv"] 

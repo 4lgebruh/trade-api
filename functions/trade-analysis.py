@@ -4,6 +4,25 @@ import os
 from urllib.parse import parse_qs
 import supabase
 
+# Try importing transformers, with fallback if it fails
+try:
+    from transformers import pipeline
+    HAS_TRANSFORMERS = True
+    print("Successfully loaded transformers library")
+    
+    # Initialize text generation pipeline with small model specifically designed for text generation
+    try:
+        generator = pipeline('text-generation', model='distilgpt2', max_length=100)
+        print("Successfully loaded distilgpt2 model")
+    except Exception as e:
+        print(f"Error loading model: {e}")
+        generator = None
+        HAS_TRANSFORMERS = False
+except ImportError:
+    print("Transformers library not available, using fallback mode")
+    HAS_TRANSFORMERS = False
+    generator = None
+
 # Helper function to analyze trades
 def analyze_trades(trades):
     if not trades:
@@ -79,8 +98,47 @@ def analyze_trades(trades):
         "suggestions": suggestions[:3] # Limit to top 3
     }
 
-# Generate a default trading coach response
+# Generate trading coach response using transformers if available, fallback to templates if not
 def generate_coach_response(user_message, trade_analysis):
+    # Try AI-generated response if transformers is available
+    if HAS_TRANSFORMERS and generator is not None:
+        try:
+            # Create a prompt based on the analysis and user message
+            win_rate_percent = round(trade_analysis["win_rate"] * 100, 1)
+            avg_pnl = trade_analysis["avg_profit_loss"]
+            strategies = ', '.join(trade_analysis["strategies"]) if trade_analysis["strategies"] else 'None recorded'
+            strengths = ', '.join(trade_analysis["strengths"]) if trade_analysis["strengths"] else 'None identified'
+            weaknesses = ', '.join(trade_analysis["weaknesses"]) if trade_analysis["weaknesses"] else 'None identified'
+            
+            prompt = f"""
+As a professional trading coach, give advice to a trader with:
+- Win rate: {win_rate_percent}%
+- Average P&L: ${avg_pnl:.2f}
+- Strategies: {strategies}
+- Strengths: {strengths}
+- Weaknesses: {weaknesses}
+
+The trader asks: "{user_message}"
+
+Your helpful advice:"""
+            
+            # Generate response with transformers
+            sequences = generator(prompt, max_length=150, num_return_sequences=1)
+            generated_text = sequences[0]['generated_text']
+            
+            # Extract just the advice part
+            advice_part = generated_text.split("Your helpful advice:")[-1].strip()
+            
+            # Clean up the response
+            if advice_part and len(advice_part) >= 10:
+                return advice_part[:500]  # Limit response length
+                
+            # Fallback to templates if generation is empty or too short
+            print("AI generation produced too short response, using fallback")
+        except Exception as e:
+            print(f"Error generating AI response: {e}")
+    
+    # Fallback to template-based response
     # Create a personalized response based on the analysis
     win_rate_percent = round(trade_analysis["win_rate"] * 100, 1)
     avg_pnl = trade_analysis["avg_profit_loss"]
