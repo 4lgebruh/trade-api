@@ -3,25 +3,32 @@ import json
 import os
 from urllib.parse import parse_qs
 import supabase
+import requests
 
-# Try importing transformers, with fallback if it fails
+# Try importing OpenAI, with fallback if it fails
 try:
-    from transformers import pipeline
-    HAS_TRANSFORMERS = True
-    print("Successfully loaded transformers library")
+    import openai
+    HAS_AI = True
+    print("Successfully loaded OpenAI library")
     
-    # Initialize text generation pipeline with small model specifically designed for text generation
+    # Initialize OpenAI client if API key is available
     try:
-        generator = pipeline('text-generation', model='distilgpt2', max_length=100)
-        print("Successfully loaded distilgpt2 model")
+        openai_api_key = os.environ.get("OPENAI_API_KEY")
+        if openai_api_key:
+            openai_client = openai.OpenAI(api_key=openai_api_key)
+            print("Successfully initialized OpenAI client")
+        else:
+            print("OpenAI API key not found, AI responses will be disabled")
+            openai_client = None
+            HAS_AI = False
     except Exception as e:
-        print(f"Error loading model: {e}")
-        generator = None
-        HAS_TRANSFORMERS = False
+        print(f"Error initializing OpenAI client: {e}")
+        openai_client = None
+        HAS_AI = False
 except ImportError:
-    print("Transformers library not available, using fallback mode")
-    HAS_TRANSFORMERS = False
-    generator = None
+    print("OpenAI library not available, using fallback mode")
+    HAS_AI = False
+    openai_client = None
 
 # Helper function to analyze trades
 def analyze_trades(trades):
@@ -98,10 +105,10 @@ def analyze_trades(trades):
         "suggestions": suggestions[:3] # Limit to top 3
     }
 
-# Generate trading coach response using transformers if available, fallback to templates if not
+# Generate trading coach response using OpenAI if available, fallback to templates if not
 def generate_coach_response(user_message, trade_analysis):
-    # Try AI-generated response if transformers is available
-    if HAS_TRANSFORMERS and generator is not None:
+    # Try AI-generated response if OpenAI client is available
+    if HAS_AI and openai_client is not None:
         try:
             # Create a prompt based on the analysis and user message
             win_rate_percent = round(trade_analysis["win_rate"] * 100, 1)
@@ -110,31 +117,25 @@ def generate_coach_response(user_message, trade_analysis):
             strengths = ', '.join(trade_analysis["strengths"]) if trade_analysis["strengths"] else 'None identified'
             weaknesses = ', '.join(trade_analysis["weaknesses"]) if trade_analysis["weaknesses"] else 'None identified'
             
-            prompt = f"""
-As a professional trading coach, give advice to a trader with:
-- Win rate: {win_rate_percent}%
-- Average P&L: ${avg_pnl:.2f}
-- Strategies: {strategies}
-- Strengths: {strengths}
-- Weaknesses: {weaknesses}
-
-The trader asks: "{user_message}"
-
-Your helpful advice:"""
+            # Call OpenAI API
+            response = openai_client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": f"You are a professional trading coach providing concise advice to traders. The trader has the following metrics: Win rate: {win_rate_percent}%, Average P&L: ${avg_pnl:.2f}, Strategies used: {strategies}, Strengths: {strengths}, Weaknesses: {weaknesses}. Keep your response under 150 words, focused on actionable advice."},
+                    {"role": "user", "content": user_message}
+                ],
+                max_tokens=300,
+                temperature=0.7
+            )
             
-            # Generate response with transformers
-            sequences = generator(prompt, max_length=150, num_return_sequences=1)
-            generated_text = sequences[0]['generated_text']
+            # Extract the response content
+            ai_response = response.choices[0].message.content.strip()
             
-            # Extract just the advice part
-            advice_part = generated_text.split("Your helpful advice:")[-1].strip()
-            
-            # Clean up the response
-            if advice_part and len(advice_part) >= 10:
-                return advice_part[:500]  # Limit response length
+            if ai_response:
+                return ai_response
                 
-            # Fallback to templates if generation is empty or too short
-            print("AI generation produced too short response, using fallback")
+            # Fallback to templates if generation is empty
+            print("OpenAI returned empty response, using fallback")
         except Exception as e:
             print(f"Error generating AI response: {e}")
     

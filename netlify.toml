@@ -1,5 +1,5 @@
 [build]
-  command = "pip install -r requirements.txt --no-build-isolation"
+  command = "pip install -r requirements.txt"
   publish = "."
   [build.environment]
     NETLIFY_USE_BINARY = "true"
@@ -33,7 +33,7 @@
   status = 200
 
 [functions."trade-analysis"]
-  external_node_modules = ["supabase", "python-dotenv", "transformers", "numpy"]
+  external_node_modules = ["supabase", "python-dotenv", "openai", "requests"]
 
 [functions."health"] 
   external_node_modules = ["python-dotenv"] 
